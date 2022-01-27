@@ -1,0 +1,514 @@
+---
+title: "Wage_visualization"
+author: "Team_10"
+date: "3/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd('F:/GMU/STAT515/Mid Term Project')
+```
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(MASS)
+source('D:/Spring_2021/STAT 515_Prof.ScottBruce/hw.R')
+library(dplyr)
+library(choroplethr)
+library(choroplethrMaps)
+library(RColorBrewer)
+library(acs)
+
+library(micromapST)
+library(plotly)
+```
+
+
+```{r}
+wage <- read.csv("D:/Spring_2021/STAT 515_Prof.ScottBruce/After final/miderm-final-projects/Minimum Wage.csv")
+head(wage)
+```
+```{r}
+stateabb <- read.csv("D:/Spring_2021/STAT 515_Prof.ScottBruce/After final/miderm-final-projects/stateabb.csv")
+head(stateabb)
+```
+
+preprocessing for dynamic us map for effective min wage change accross years
+```{r}
+
+x_wage = wage%>%
+  inner_join(stateabb , by.x = State ,by.y = State  )%>%
+  select(Abbreviation,State, Year, min_wage = State.Minimum.Wage)%>%
+  mutate(hover = paste(State , "\n$",min_wage))
+
+
+```
+
+dynamic us map for effective min wage change accross years
+
+```{r}
+
+plot_geo(x_wage,
+        locationmode ='USA-states',
+        frame = ~Year
+          )%>%
+  add_trace(locations = ~Abbreviation,
+            z = ~min_wage,
+            color = ~min_wage,
+            text = ~hover,
+            hoverinfo = 'text'
+            ) %>%
+  layout(geo = list(scope = 'usa'),
+         title = 'min wage title'
+         )%>%
+  config(displayModeBar=FALSE)%>%
+  colorbar(tickprefix = "$" )
+
+
+```
+micromap of all states in 1968 and 2020
+
+
+
+```{r}
+
+mic_wage = wage%>%
+  filter(Year == 1968 )%>%
+  dplyr :: select(State ,Effective.Minimum.Wage)
+
+mic_wagex = wage%>%
+  filter(Year == 2020 )%>%
+  dplyr :: select(State ,Effective.Minimum.Wage)
+
+m_wage = merge(mic_wage,mic_wagex,by='State')
+
+names(m_wage)[names(m_wage) == "Effective.Minimum.Wage.x"] <- "ewg_68"
+names(m_wage)[names(m_wage) == "Effective.Minimum.Wage.y"] <- "ewg_20"
+
+
+
+panelDesc <- data.frame(
+  type = c('map','id','bar','bar'),
+  lab1 = c('' ,'','1968','2020'),
+  lab3 = c('','','',''),
+  col1 = c(NA,NA,'ewg_68','ewg_20')
+)
+
+
+fName = "mic.pdf"
+pdf(file=fName,width=7.5,height=10)
+
+micromapST( m_wage, panelDesc,
+            rowNamesCol = 'State',
+            rowNames = 'full',
+            plotNames = 'full',  
+            sortVar = 'ewg_20',ascend = FALSE,
+            title = c("State Minimum Wage in USA by States",
+                      "in 1968 , 2020"),
+            ignoreNoMatches = TRUE)
+
+dev.off()
+
+```
+
+state or fed preprocessing for chlororpeth
+```{r}
+wage$value = ifelse(wage$Effective.Minimum.Wage == wage$Federal.Minimum.Wage,"fed","state")
+wage$region =  tolower(wage$State)
+```
+state or fed 1968
+```{r}
+sf_1968 = wage%>%
+  filter(Year==1968)%>%
+  dplyr :: select(region,value)
+
+state_choropleth(sf_1968,
+                 num_color = 4,
+                 title = "US 1968 Minimum wage usage by States"
+                 ) +
+  theme(plot.title = element_text(hjust = .5) ) +
+  scale_fill_manual(values = c("#DF6589FF",'#00B1D2FF'),name = "Minimum Wage Usage", labels= c('Federal','State'))
+  
+
+```
+
+state or fed 2020
+
+```{r}
+
+sf_2020 = wage%>%
+  filter(Year==2020)%>%
+  dplyr :: select(region,value)
+
+
+state_choropleth(sf_2020,
+                 num_color = 4,
+                 title = "US 2020 Minimum wage usage by States",
+                 ) +
+  theme(plot.title = element_text(hjust = .5) ) +
+  scale_fill_manual(values = c("#DF6589FF",'#00B1D2FF'),name = "Minimum Wage Usage", labels= c('Federal','State'))
+
+```
+wages of fed to state changing states from 1968 - 2020 
+```{r}
+
+fos_wage = wage[1892:2863,]
+fos_wage 
+
+fos_wage = wage[1892:2863,]%>%
+  filter(State %in% m_wage2$State)%>%
+  select(Year,State , Effective.Minimum.Wage)
+
+names(fos_wage)[names(fos_wage) == "Effective.Minimum.Wage"] <- "ewg"
+
+t <- list(
+  family = "Arial Black",
+  face = 'bold',
+  size = 11)
+ plot_ly(fos_wage,frame = ~Year , x = ~ewg , y = ~State)%>%
+         layout(title = list(text='States that Flippped from using Federal to State Minimum Wage in USA'),
+           yaxis = list(title = 'States'),
+         xaxis = list(title = 'Effective Minimum Wage '),
+         legend = list(x = 0.80, y = 0.90),
+         font=t)
+
+```
+preprocessing for top5
+```{r}
+top5_all =wage%>%
+  group_by(Year)%>%
+  arrange(desc(Effective.Minimum.Wage))%>%
+  slice(1:5)%>%
+  dplyr :: select(Year,State,Effective.Minimum.Wage)
+```
+
+
+top from 1968 to 1995
+
+```{r}
+
+state_95 = top5_all%>%
+  filter(Year==1995)
+
+state_95 =   as.vector(state_95$State)
+
+
+top5_95 = wage[1:1350,] %>%
+  filter(State %in% state_95)%>%
+  group_by(Year)%>%
+  arrange(desc(Effective.Minimum.Wage))%>%
+  slice(1:5)%>%
+  dplyr :: select(Year,State,Effective.Minimum.Wage)
+
+ggplot(top5_95 , aes(x =Year   ,y=Effective.Minimum.Wage ,group=State, color = State ) )+
+  geom_line(size=1.5,alpha = 0.6)+
+  geom_point(size = 2.5)+
+  labs(title = 'Trend in TOP 5 States of 1995 with Higest Minimum Wage' , x = 'Year' , y = 'Effective Minimum Wage' )+
+  scale_y_discrete( limits = c(1,2,3,4,5))+
+  theme(
+    legend.position = 'bottom',
+    plot.title = element_text( face='bold' , size =15 ),
+    axis.title.x = element_text(face='bold', size =12),
+    axis.title.y = element_text(face='bold', size =12),
+    legend.text = element_text( face = 'bold',size =10 ),
+    legend.title = element_text( face = 'bold',size =13 ),
+    #changing faecet label text type and background color
+    strip.text.x = element_text(
+      size = 12, color = "white", face = "bold"
+    ),
+    strip.background = element_rect(
+      color="white", fill="#f3a953", size=0.5, 
+    )
+  )
+
+```
+Top 5 from 1995 - 2020
+
+```{r echo=FALSE}
+state_20 = top5_all%>%
+  filter(Year==2020)
+
+state_20 =   as.vector(state_20$State)
+
+top5_20 = wage[1512:2862,]%>%
+  filter(State %in% state_20)%>%
+  group_by(Year)%>%
+  arrange(desc(Effective.Minimum.Wage))%>%
+  slice(1:5)%>%
+  dplyr :: select(Year,State,Effective.Minimum.Wage)
+
+par(mfrow = c(1,2))
+ggplot(top5_20,aes(x =Year   ,y=Effective.Minimum.Wage ,group=State, color = State) )+
+  geom_line(size=1.5,alpha = 0.8)+
+  geom_point(size = 2.5)+
+  labs(title = 'Trend of TOP 5 States with Higest Minimum Wage in 2020')+
+  theme_fivethirtyeight()
+
+ggplot(top5_20 , aes(x =Year   ,y=Effective.Minimum.Wage ,group=State, color = State ) )+
+  geom_line(size=1.5,alpha = 0.6)+
+  geom_point(size = 2.5)+
+  labs(title = 'Trend of TOP 5 States with Higest Minimum Wage in 1995', x = 'Year' , y = 'Effective Minimum Wage' )+
+  hw+
+  theme(
+    legend.position = 'bottom',
+    plot.title = element_text( face='bold' , size =15 ),
+    axis.title.x = element_text(face='bold', size =12),
+    axis.title.y = element_text(face='bold', size =12),
+    legend.text = element_text( face = 'bold',size =10 ),
+    legend.title = element_text( face = 'bold',size =13 ),
+    #changing faecet label text type and background color
+    strip.text.x = element_text(
+      size = 12, color = "white", face = "bold"
+    ),
+    strip.background = element_rect(
+      color="white", fill="#f3a953", size=0.5, 
+    )
+  )
+```
+
+```{r}
+
+top5_95x = top5_95%>%
+  mutate(diff = paste('1968 - 1995'))
+
+top5_20x = top5_20%>%
+  mutate(diff = paste('1995 - 2020'))
+
+xa = data.frame(top5_95x , top5_20x )
+
+```
+
+
+
+
+```{r}
+plot_ly(top5_20 , frame = ~Year ,x =~Effective.Minimum.Wage  , y = ~State ,type = 'scatter',linetype = ~Effective.Minimum.Wage ,mode = 'lines+markers',groups = ~State)
+```
+
+
+micromap of all states in 1968 and 2020 that flipped from fed to state 
+
+```{r}
+
+mic_wage2 = wage%>%
+  filter(Year == 1968 & value=='fed')%>%
+  dplyr :: select(State , State.Minimum.Wage ,Effective.Minimum.Wage)
+
+
+mic_wagex2 = wage%>%
+  filter(Year == 2020 & value == 'state')%>%
+  dplyr :: select(State , Effective.Minimum.Wage)
+
+m_wage2 = merge(mic_wage2, mic_wagex2 ,by= 'State')
+
+names(m_wage2)[names(m_wage2) == "State.Minimum.Wage"] <- "swg_68"
+names(m_wage2)[names(m_wage2) == "Effective.Minimum.Wage.x"] <- "ewg_68"
+names(m_wage2)[names(m_wage2) == "Effective.Minimum.Wage.y"] <- "ewg_20"
+
+
+panelDesc <- data.frame(
+  type = c('map','id','bar','bar'),
+  lab1 = c('' ,'','1968','2020'),
+  lab3 = c('','','',''),
+  col1 = c(NA,NA,'ewg_68','ewg_20')
+)
+
+
+fName = "mic2.pdf"
+pdf(file=fName,width=7.5,height=10)
+
+micromapST( m_wage2, panelDesc,
+            rowNamesCol = 'State',
+            rowNames = 'full',
+            plotNames = 'full',  
+            sortVar = 'ewg_20',ascend = FALSE,
+            title = c("State Minimum wage that changed from Fed to State in USA by States",
+                      "in 1968 , 2020"),
+            ignoreNoMatches = TRUE,
+            axisScale="sn")
+
+dev.off()
+
+```
+
+preprocessing for dynamic us map for min wage type change accross years
+```{r}
+
+
+wage$value = ifelse(wage$Effective.Minimum.Wage == wage$Federal.Minimum.Wage,"fed","state")
+y_wage = wage%>%
+  inner_join(stateabb , by.x = State ,by.y = State  )%>%
+  select(Abbreviation,State, Year, sof = value)%>%
+  mutate(hover = paste(State))
+
+
+```
+
+dynamic us map for effective min wage change accross years
+
+```{r}
+
+plot_geo(y_wage,
+         locationmode ='USA-states',
+         frame = ~Year
+            )%>%
+  add_trace(locations = ~Abbreviation,
+           # z = ~sof,
+            color = ~sof,
+            text = ~hover,
+            hoverinfo = 'text'
+  ) %>%
+  layout(geo = list(scope = 'usa'),
+         title = 'sof'
+  ) %>%
+  config(displayModeBar=TRUE)%>%
+  colorbar(tickprefix = "$" )
+
+
+```
+wage os states from 1968 to 2020
+```{r}
+
+plot_ly(wage,frame = ~Year , x = ~Effective.Minimum.Wage , y = ~State )%>%
+         layout(xaxis = list(title = 'States in USA'),
+         yaxis = list(title = 'Effective Minimum Wage '),
+         legend = list(x = 0.80, y = 0.90))
+
+```
+
+
+
+
+
+```{r}
+mic_wage3 = wage%>%
+  filter(Year == 1968 & value=='state')%>%
+  select(State , State.Minimum.Wage ,Effective.Minimum.Wage)
+
+
+mic_wagex3 = wage%>%
+  filter(Year == 2020 & value == 'fed')%>%
+  select(State , Effective.Minimum.Wage)
+
+m_wage3 = merge(mic_wage3, mic_wagex3 ,by= 'State')
+
+sof_wage = wage%>%
+  filter(State %in% m_wage3$State)%>%
+  select(Year,State , Effective.Minimum.Wage)
+
+names(sof_wage)[names(sof_wage) == "Effective.Minimum.Wage"] <- "ewg"
+
+
+
+plot_ly(sof_wage,frame = ~Year , x = ~ewg , y = ~State)
+
+```
+
+
+```{r}
+top5s = wage%>%
+  filter(Year %in% c(1968,1995,2020))%>%
+  group_by(Year)%>%
+  arrange(desc(Effective.Minimum.Wage))%>%
+  slice(1:5)%>%
+  select(Year,State,Effective.Minimum.Wage)%>%
+  summarise(sum_5 = sum(Effective.Minimum.Wage))
+
+all = wage%>%
+  filter(Year %in% c(1968,1995,2020))%>%
+  group_by(Year)%>%
+  summarize(all_s = sum(Effective.Minimum.Wage))
+
+th_s = merge(top5s,all,by='Year')
+
+rest_s = wage%>%
+  filter(Year %in% c(1968,1995,2020))%>%
+  group_by(Year)%>%
+  arrange(desc(Effective.Minimum.Wage))%>%
+  slice(6:54)%>%
+  summarize(rest_s = sum(Effective.Minimum.Wage))
+
+th5_s = merge(top5s , rest_s,by='Year')
+xa = merge(top5s , rest_s,by='Year')
+xa = merge(xa , all, by = 'Year')
+
+xa = xa %>%
+  mutate(pe_top = sum_5/ all_s , pe_mid = )
+th_5s = th5_s%>%
+  gather(key=type_of_data,value=sum_value,-Year)
+
+ggplot(th_5s,aes(x = Year , y=sum_value ,fill = type_of_data) )+
+  geom_bar(stat = 'identity',position = position_dodge(18))+
+    scale_fill_manual( labels= c('sum_5'='Top - 5 States','rest_s'='States Except Top-5'), values=c("#DF6589FF",'#00B1D2FF'))+
+  geom_text(aes(group = type_of_data,label=paste(sum_value)),
+            position = position_dodge(18) , vjust = -1, size = 5)+
+  labs(y = "Sum of Minimum Wages of States",
+       x="Years",
+       title="Effect of Top 5 states with others",fill='Sum of Minimum Wages over States')+
+  hw+
+  theme(
+    legend.position = 'top',
+    plot.title = element_text( face='bold' , size =20 ),
+    axis.title.x = element_text(face='bold', size =20),
+    axis.title.y = element_text(face='bold', size =20),
+    legend.text = element_text( face = 'bold',size =10 ),
+    legend.title = element_text( face = 'bold',size =13 ),
+    #changing faecet label text type and background color
+    strip.text.x = element_text(
+      size = 12, color = "white", face = "bold"
+    ),
+    strip.background = element_rect(
+      color="white", fill="#f3a953", size=0.5, 
+    )
+  )
+
+```
+
+```{r}
+
+#open on full screen to view plot 
+bot5_68  = wage%>%
+  filter(Year==1968)%>%
+  arrange(State.Minimum.Wage)%>%
+  slice(1:5)
+
+cp = wage%>%
+  filter(Year %in% c(1968,1995,2020) , State %in% bot5_68$State)%>%
+  mutate(w4 = Effective.Minimum.Wage*80)%>%
+  select(Year,State,w4, cp = CPI.Average)
+
+cp1 = cp%>%
+  gather(key = cac, value = val, -State , -Year)%>%
+  arrange(State)
+
+
+ggplot(cp1 , aes(x = State , y = val , fill=cac))+
+  geom_bar(stat = 'identity', position = 'dodge')+
+  labs(title = 'Bottom 5 States Effective Minimum Wage Vs CPI Average', x = 'States' , y = 'Dollars', subtitle = '(Monthly Basis)' , fill='')+
+  facet_grid(.~Year)+
+  scale_fill_manual(labels = c('cp'='CPI Average','w4'='Effective Minimum Wage'), values =  c("#DF6589FF",'#00B1D2FF'))+
+  geom_text(aes(label = paste(val)), position = position_dodge(width = 1  ), vjust=0 , size =5 )+
+  hw+
+  theme(
+    legend.position = 'top',
+    plot.title = element_text( face='bold' , size =18 ),
+    axis.title.x = element_text(face='bold', size =15),
+    axis.title.y = element_text(face='bold', size =15),
+    legend.text = element_text( face = 'bold',size =10 ),
+    legend.title = element_blank(),
+    #changing faecet label text type and background color
+    strip.text.x = element_text(
+      size = 12, color = "white", face = "bold"
+    ),
+    strip.background = element_rect(
+      color="white", fill="#f3a953", size=0.5, 
+    )
+  )
+  
+```
+
